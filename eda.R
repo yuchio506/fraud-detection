@@ -12,6 +12,7 @@ test_identity <- fread('./test_identity.csv') %>% data.frame
 train_transaction <- fread('./train_transaction.csv') %>% data.frame
 test_transaction <- fread('./test_transaction.csv') %>% data.frame
 
+
 # joining transaction and identity tables (one on one but mulotiple rows for one id ?)
 train <- left_join(train_transaction, train_identity)
 test <- left_join(test_transaction, test_identity)
@@ -19,8 +20,53 @@ test <- left_join(test_transaction, test_identity)
 full = train %>% bind_rows(test) 
 rm(train_identity,test_identity,train_transaction,test_transaction,train,test)
 
+
+drop_col <- c('V300','V309','V111','C3','V124','V106','V125','V315','V134','V102','V123','V316','V113',
+              'V136','V305','V110','V299','V289','V286','V318','V103','V304','V116','V29','V284','V293',
+              'V137','V295','V301','V104','V311','V115','V109','V119','V321','V114','V133','V122','V319',
+              'V105','V112','V118','V117','V121','V108','V135','V320','V303','V297','V120')
+
+full_tmp = full%>%
+  mutate(istrain = ifelse(is.na(isFraud),0,1))%>%
+  select(-drop_col)%>%
+  mutate(
+    pseudo_date = as.Date(TransactionDT%/%86400,origin = '2019-01-01'),
+    pseudo_month = month(pseudo_date),
+    hr = floor( (TransactionDT / 3600) %% 24 ),
+    weekday = floor( (TransactionDT / 3600 / 24) %% 7)
+  ) %>%
+  select(-TransactionID,-TransactionDT)
+
+full_tmp$pseudo_month%>%table()
+
+# 
+full_tmp%>%
+  group_by(pseudo_month,istrain)%>%
+  summarise(count_ = n())%>%
+  ggplot(aes(x= as.factor(pseudo_month), y= count_,fill = istrain))+
+  geom_col()
+
+# weekday 1-->Friday has a lot more consumer 1-4 is stable saterday and sunday(the least) drop 
+# but the ratio are quite the same in every day 
+full_tmp%>%
+  filter(!is.na(isFraud))%>%
+  group_by(weekday,isFraud)%>%
+  summarise(count_ = n())%>%
+  ggplot(aes(x=as.factor(weekday),y=count_,fill=isFraud))+
+  geom_col()
+
+
+
+# 7 8 9 10 11 is has less Fraud ratio 
+full_tmp%>%
+  filter(!is.na(isFraud))%>%
+  group_by(hr,isFraud)%>%
+  summarise(count_ = n())%>%
+  ggplot(aes(x=as.factor(hr),y=count_,fill=isFraud))+
+  geom_col()
+
+full_tmp$weekday
 #### preprocess  ####
-full$isFraud
 
 
 
