@@ -8,6 +8,7 @@ setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 #### read in file and join ####
 train_identity <- fread('./train_identity.csv') %>% data.frame
 test_identity <- fread('./test_identity.csv') %>% data.frame
+train_identity%>%names()
 
 train_transaction <- fread('./train_transaction.csv') %>% data.frame
 test_transaction <- fread('./test_transaction.csv') %>% data.frame
@@ -20,31 +21,88 @@ test <- left_join(test_transaction, test_identity)
 full = train %>% bind_rows(test) 
 rm(train_identity,test_identity,train_transaction,test_transaction,train,test)
 
-
+#### preprocess start ####
+# too many null cols 
 drop_col <- c('V300','V309','V111','C3','V124','V106','V125','V315','V134','V102','V123','V316','V113',
               'V136','V305','V110','V299','V289','V286','V318','V103','V304','V116','V29','V284','V293',
               'V137','V295','V301','V104','V311','V115','V109','V119','V321','V114','V133','V122','V319',
               'V105','V112','V118','V117','V121','V108','V135','V320','V303','V297','V120')
 
-full_tmp = full%>%
-  mutate(istrain = ifelse(is.na(isFraud),0,1))%>%
+
+# create the time index
+full = full%>%
+  mutate(istrain = ifelse(is.na(isFraud),0,1))%>% # create a label for fltering train and test 
   select(-drop_col)%>%
   mutate(
-    pseudo_date = as.Date(TransactionDT%/%86400,origin = '2019-01-01'),
+    pseudo_date = as.Date(TransactionDT%/%86400,origin = '2019-01-01'), # time unit is second (86400 can get pseudo date )
     pseudo_month = month(pseudo_date),
     hr = floor( (TransactionDT / 3600) %% 24 ),
     weekday = floor( (TransactionDT / 3600 / 24) %% 7)
-  ) %>%
-  select(-TransactionID,-TransactionDT)
+  ) 
 
-full_tmp$pseudo_month%>%table()
 
-# 
-full_tmp%>%
+# the moziila firefox and icedragon  is always fraud (the never fraud can be merged ?)
+# a very important column should do a lot of string text converrsion and merging 
+full %>% 
+  group_by(id_31)%>%
+  summarise(sum_id_fraud = mean(isFraud,na.rm= T))%>%
+  arrange(desc(sum_id_fraud))%>%
+  filter(sum_id_fraud>=0.5)%>%
+  ggplot(aes(x= id_31 ,y= sum_id_fraud))+
+  geom_col()
+# should check the ratio of the fraud group by device vary by month or not 
+full %>% 
+  group_by(id_31)%>%
+  summarise(sum_id_fraud = mean(isFraud,na.rm= T))%>%
+  arrange(desc(sum_id_fraud))%>%
+  mutate(zero_pct_id31 = ifelse(sum_id_fraud == 0 ,'SAVED'))%>%
+  select(zero_pct_id31)%>%table()
+# the fraaud happen at the same date almost same time same 
+# the start time - end time is almost 1 hour (3600 second from original DT)
+# the fraud is successive happen within a short time 
+# maybe on the same account so we should develop a way to identify the same account 
+# and then build a way of SBG form 
+# fraud amount are quite the same 
+# a man can't shop in diff addr in just seconds ?
+# once you're fraud you'll be fraud for many times 
+full %>%filter(id_31 == 'icedragon')%>%
+select(hr,pseudo_month,pseudo_date,TransactionDT,TransactionAmt,TransactionID,addr1,addr2,
+       dist1,dist2,card1,card2,card3,card4,card4,card5,ProductCD,C1:C9)
+full%>%names()
+full %>%filter(id_31 == 'Mozilla/Firefox')%>%
+  select(hr,pseudo_month,pseudo_date,TransactionDT,TransactionAmt,TransactionID,addr1,addr2,
+         dist1,dist2,card1,card2,card3,card4,card4,card5,ProductCD,C1:C9)
+
+same_person_mapping = full %>% 
+  group_by(card1:card6)
+
+full%>%filter(
+)
+full%>%filter(isFraud==1)%>%select(card1,card4,card6)%>%unique()
+
+full%>%
+  #filter(isFraud==1)%>%
+  group_by(card1,card4,card6)%>%
+  select(hr,pseudo_month,pseudo_date,TransactionDT,TransactionAmt,TransactionID,addr1,addr2,
+         dist1,dist2,card1,card2,card3,card4,card4,card5,card6,ProductCD,C1:C9)%>%
+View()
+
+full$card1%>%anyNA()
+full$card2%>%anyNA()
+full$card3%>%anyNA()
+full$card4%>%anyNA()
+full$card5%>%anyNA()
+full$card6%>%anyNA()
+
+full%>%nrow()
+
+
+# the fraud by month 
+full%>%
   group_by(pseudo_month,istrain)%>%
   summarise(count_ = n())%>%
-  ggplot(aes(x= as.factor(pseudo_month), y= count_,fill = istrain))+
-  geom_col()
+  ggplot(aes(x= as.factor(pseudo_month), y= count_,fill = as.factor(istrain)))+
+  geom_col(alpha =0.5)
 
 # weekday 1-->Friday has a lot more consumer 1-4 is stable saterday and sunday(the least) drop 
 # but the ratio are quite the same in every day 
@@ -66,10 +124,9 @@ full_tmp%>%
   geom_col()
 
 full_tmp$weekday
-#### preprocess  ####
 
 
-
+####
 train = full%>%filter(!is.na(isFraud )) 
 test =  full%>%filter(is.na(isFraud )) 
 
