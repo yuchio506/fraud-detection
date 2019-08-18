@@ -20,6 +20,12 @@ test <- left_join(test_transaction, test_identity)
 
 full = train %>% bind_rows(test) 
 rm(train_identity,test_identity,train_transaction,test_transaction,train,test)
+full %>% select(TransactionID,TransactionDT,TransactionAmt,pseudo_date,hr,isFraud,ProductCD,card1:card6,addr1,addr2)%>%
+  filter(isFraud == 1)%>%group_by(card1,card4,card5,pseudo_date,hr)%>%mutate(using_count = n())%>%View()
+
+
+full %>% select(TransactionID,TransactionDT,TransactionAmt,pseudo_date,hr,isFraud,card1:card6)%>%
+  filter(isFraud == 0)%>%View()
 
 #### preprocess start ####
 # too many null cols 
@@ -73,6 +79,13 @@ full %>%filter(id_31 == 'Mozilla/Firefox')%>%
   select(hr,pseudo_month,pseudo_date,TransactionDT,TransactionAmt,TransactionID,addr1,addr2,
          dist1,dist2,card1,card2,card3,card4,card4,card5,ProductCD,C1:C9)
 
+
+
+
+full %>% select(TransactionID,TransactionDT,TransactionAmt,pseudo_date,hr,isFraud,ProductCD,card1:card6,addr1,addr2)%>%
+  filter(isFraud == 1)%>%group_by(card1,card4,card5,pseudo_date,hr)%>%
+  mutate(Fraud_duration = max(TransactionDT)-min(TransactionDT))%>%View()
+  
 same_person_mapping = full %>% 
   group_by(card1:card6)
 
